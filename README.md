@@ -4,11 +4,11 @@ Windows에서 모니터 화면을 녹화하고 9:16 세로 쇼츠 영상으로 �
 
 ## 실행 파일
 
-[Releases](https://github.com/access1061/shorts_maker_pro/releases)에서 `ShortMakerPro-Windows.zip`을 받아 압축을 풀고 `ShortMaker.exe`를 실행합니다. 실행 파일과 함께 `ffmpeg.exe`, `_internal` 폴더가 필요합니다. Python 설치는 필요하지 않습니다. 영상은 사용자 폴더의 `ShortMaker/output`에 저장됩니다.
+[Releases](https://github.com/access1061/shorts_maker_pro/releases/latest)에서 `ShortMakerPro-Windows.zip`을 받아 압축을 풀고 `ShortMaker.exe`를 실행합니다. 실행 파일과 함께 `ffmpeg.exe`, `_internal` 폴더가 필요합니다. Python 설치는 필요하지 않습니다. 영상은 사용자 폴더의 `ShortMaker/output`에 저장됩니다.
 
 ## 소스 코드 실행
 
-Python 3과 Tkinter가 필요합니다. `ffmpeg.exe`를 `app.py`와 같은 폴더에 두고 실행하세요.
+Windows 10/11, Python 3.9 이상(Tkinter 포함)이 필요합니다. `ffmpeg.exe`는 용량 문제로 저장소에 포함하지 않으므로 [gyan.dev FFmpeg 빌드](https://www.gyan.dev/ffmpeg/builds/)에서 받아 `bin/ffmpeg.exe`를 `app.py`와 같은 폴더에 두고 실행하세요.
 
 ```powershell
 pip install pyaudiowpatch sv-ttk
@@ -27,7 +27,7 @@ python app.py
 ## 배포판 빌드
 
 ```powershell
-pip install pyinstaller
+pip install pyinstaller pyaudiowpatch sv-ttk
 python -m PyInstaller --noconfirm --distpath dist/pro ShortMaker.spec
 ```
 
@@ -38,3 +38,7 @@ python -m PyInstaller --noconfirm --distpath dist/pro ShortMaker.spec
 ```powershell
 python -m unittest -v
 ```
+
+## 라이선스 고지
+
+배포판에는 gyan.dev의 FFmpeg 8.0.1 full build가 포함되며, 이 빌드는 GPL 버전 3 이상으로 제공됩니다. 자세한 내용은 https://www.gyan.dev/ffmpeg/builds/ 와 https://ffmpeg.org/legal.html 을 참고하세요. UI 테마는 [Sun Valley ttk theme](https://github.com/rdbende/Sun-Valley-ttk-theme)(MIT)를 사용합니다.
