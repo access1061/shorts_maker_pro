@@ -16,6 +16,8 @@ import wave
 import pyaudiowpatch as pyaudio
 import sv_ttk
 
+# 앱 버전: build.py가 빌드할 때마다 마지막 자리를 1씩 올린다
+VERSION = "1.0.2"
 BASE = Path(sys.executable if getattr(sys, "frozen", False) else __file__).resolve().parent
 FFMPEG = BASE / "ffmpeg.exe"
 OUTPUT = Path.home() / "ShortMaker" / "output" if getattr(sys, "frozen", False) else BASE / "output"
@@ -153,6 +155,12 @@ def selection_rect(start, end, width, height, vertical):
     return left, top, dx, dy
 
 
+def monitor_name(device):
+    # "\\.\DISPLAY3" 같은 장치 이름은 한글 글꼴에서 역슬래시가 ₩로 보이므로 "모니터 3"으로 바꾼다
+    match = re.search(r"DISPLAY(\d+)", device)
+    return f"모니터 {match.group(1)}" if match else device.lstrip("\\.")
+
+
 def region_summary(monitor, region, confirmed):
     # 메인 창에 보여 줄 최종 녹화 범위 한 줄 요약
     if not monitor:
@@ -199,7 +207,8 @@ class App:
         self.indicator = None
         self.recorder = None
         self.audio_sources = [None]
-        root.title("Shorts Maker Pro")
+        self.identification_popup = None
+        root.title(f"Shorts Maker Pro v{VERSION}")
         root.geometry("620x710")
         root.minsize(580, 690)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -213,7 +222,10 @@ class App:
         ttk.Label(header, text="●", style="Logo.TLabel").pack(side="left", padx=(0, 10))
         titles = ttk.Frame(header)
         titles.pack(side="left", fill="x", expand=True)
-        ttk.Label(titles, text="Shorts Maker Pro", style="Title.TLabel").pack(anchor="w")
+        name_row = ttk.Frame(titles)
+        name_row.pack(anchor="w")
+        ttk.Label(name_row, text="Shorts Maker Pro", style="Title.TLabel").pack(side="left")
+        ttk.Label(name_row, text=f"v{VERSION}", style="Hint.TLabel").pack(side="left", padx=(8, 0), pady=(8, 0))
         ttk.Label(titles, text="화면을 녹화해 9:16 세로 쇼츠 영상으로 바로 변환합니다.", style="Hint.TLabel").pack(anchor="w")
 
         # 1. 화면 카드: 모니터와 녹화 영역
@@ -331,7 +343,7 @@ class App:
             self.monitor_list = monitors()
             if not self.monitor_list:
                 raise RuntimeError("사용 가능한 모니터가 없습니다.")
-            labels = [f"{m[0]} · {m[3]}×{m[4]}" + (" · 기본 모니터" if m[5] else "") for m in self.monitor_list]
+            labels = [f"{monitor_name(m[0])} · {m[3]}×{m[4]}" + (" · 기본 모니터" if m[5] else "") for m in self.monitor_list]
             self.monitor_box["values"] = labels
             self.monitor_box.current(next((i for i, m in enumerate(self.monitor_list) if m[5]), 0))
             self.reset_region()
@@ -344,8 +356,15 @@ class App:
             messagebox.showerror("장치 확인 실패", str(exc))
 
     def reset_region(self):
+        self.close_identification()
         self.selected_region = None
         self.set_confirmed(False)
+
+    def close_identification(self):
+        # 범위가 바뀌면 이전 범위를 보여 주던 확인 화면은 닫는다
+        if self.identification and self.identification.winfo_exists():
+            self.identification.destroy()
+        self.identification = None
 
     def current_monitor(self):
         index = self.monitor_box.current()
@@ -363,6 +382,7 @@ class App:
         index = self.monitor_box.current()
         if index < 0:
             return
+        self.close_identification()
         monitor = self.monitor_list[index]
         _, left, top, width, height, _ = monitor
         if monitor not in monitors():
@@ -467,7 +487,7 @@ class App:
         panel.pack()
         kind = "지정 영역" if self.selected_region else "전체 모니터"
         tk.Label(panel, text="빨간 테두리 안이 녹화됩니다", bg="#202020", fg="white", font=("맑은 고딕", 16, "bold")).pack()
-        tk.Label(panel, text=f"{monitor[0]} · {kind} · {rw}×{rh}", bg="#202020", fg="#57c8ff", font=("맑은 고딕", 11, "bold")).pack(pady=(4, 12))
+        tk.Label(panel, text=f"{monitor_name(monitor[0])} · {kind} · {rw}×{rh}", bg="#202020", fg="#57c8ff", font=("맑은 고딕", 11, "bold")).pack(pady=(4, 12))
         buttons = tk.Frame(panel, bg="#202020")
         buttons.pack()
 

@@ -1,5 +1,5 @@
 import unittest
-from app import audio_offset_filter, crop_positions, panel_y, region_summary, selection_rect, video_start_time
+from app import audio_offset_filter, crop_positions, monitor_name, panel_y, region_summary, selection_rect, video_start_time
 
 
 class SelectionTests(unittest.TestCase):
@@ -20,6 +20,10 @@ class ConfirmTests(unittest.TestCase):
         self.assertEqual(region_summary(monitor, None, False), "● 미확인 · 전체 모니터 · 1920×1080")
         self.assertEqual(region_summary(monitor, (100, 50, 608, 1080), True), "✔ 확인됨 · 지정 영역 · 608×1080")
         self.assertEqual(region_summary(None, None, False), "모니터를 선택하세요")
+
+    def test_monitor_name_hides_backslashes(self):
+        self.assertEqual(monitor_name("\\\\.\\DISPLAY3"), "모니터 3")
+        self.assertEqual(monitor_name("\\\\.\\OTHER"), "OTHER")
 
     def test_panel_avoids_selected_region(self):
         self.assertEqual(panel_y(100, 300, 1080, 150), 400 + 680 // 2)

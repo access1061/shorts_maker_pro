@@ -28,10 +28,10 @@ python app.py
 
 ```powershell
 pip install pyinstaller pyaudiowpatch sv-ttk
-python -m PyInstaller --noconfirm --distpath dist/pro ShortMaker.spec
+python build.py
 ```
 
-빌드 후 `ffmpeg.exe`와 `배포_안내.txt`를 `dist/pro/ShortMaker`에 복사해 압축합니다.
+`build.py`는 실행할 때마다 `app.py`의 `VERSION` 마지막 자리를 1 올리고(예: 1.0.1 → 1.0.2), PyInstaller로 빌드한 뒤 `ffmpeg.exe`와 `배포_안내.txt`를 넣어 `dist/ShortMakerPro-Windows.zip`으로 압축합니다. 버전은 창 제목, 앱 머리글, exe 파일 속성에 표시됩니다. 버전을 그대로 두고 다시 빌드하려면 `python build.py --no-bump`를 사용합니다.
 
 ## 테스트
 
