@@ -153,6 +153,25 @@ def selection_rect(start, end, width, height, vertical):
     return left, top, dx, dy
 
 
+def region_summary(monitor, region, confirmed):
+    # 메인 창에 보여 줄 최종 녹화 범위 한 줄 요약
+    if not monitor:
+        return "모니터를 선택하세요"
+    if region:
+        text = f"지정 영역 · {region[2]}×{region[3]}"
+    else:
+        text = f"전체 모니터 · {monitor[3]}×{monitor[4]}"
+    return f"✔ 확인됨 · {text}" if confirmed else f"● 미확인 · {text}"
+
+
+def panel_y(top, height, screen_height, panel_height, margin=24):
+    # 안내 패널이 녹화 범위를 가리지 않도록 위·아래 중 넓은 빈 곳의 가운데에 둔다
+    above, below = top, screen_height - (top + height)
+    if max(above, below) >= panel_height + margin * 2:
+        return top // 2 if above > below else top + height + below // 2
+    return top + height // 2
+
+
 def crop_positions(points, width, height):
     crop_width = min(width, int(height * 9 / 16) // 2 * 2)
     current = max(0, (width - crop_width) / 2)
@@ -181,8 +200,8 @@ class App:
         self.recorder = None
         self.audio_sources = [None]
         root.title("Shorts Maker Pro")
-        root.geometry("620x680")
-        root.minsize(580, 660)
+        root.geometry("620x710")
+        root.minsize(580, 690)
         root.protocol("WM_DELETE_WINDOW", self.close)
         self.apply_theme()
         frame = ttk.Frame(root, padding=(28, 24))
@@ -205,13 +224,11 @@ class App:
         self.monitor_box = ttk.Combobox(row, state="readonly")
         self.monitor_box.pack(side="left", fill="x", expand=True)
         self.monitor_box.bind("<<ComboboxSelected>>", lambda event: self.reset_region())
-        self.identify_button = ttk.Button(row, text="화면 확인", command=self.identify_monitor)
-        self.identify_button.pack(side="left", padx=(8, 0))
         self.refresh_button = ttk.Button(row, text="새로고침", command=self.refresh)
         self.refresh_button.pack(side="left", padx=(8, 0))
         ttk.Label(screen, text="녹화 영역", style="Field.TLabel").pack(anchor="w")
         area_row = ttk.Frame(screen)
-        area_row.pack(fill="x", pady=(4, 6))
+        area_row.pack(fill="x", pady=(4, 10))
         self.ratio = ttk.Combobox(area_row, state="readonly", values=["자유 비율", "9:16 고정"], width=12)
         self.ratio.current(0)
         self.ratio.pack(side="left")
@@ -219,8 +236,16 @@ class App:
         self.area_button.pack(side="left", padx=8)
         self.reset_button = ttk.Button(area_row, text="전체 화면", command=self.reset_region)
         self.reset_button.pack(side="left")
-        self.area_status = tk.StringVar(value="전체 모니터")
-        ttk.Label(screen, textvariable=self.area_status, style="Badge.TLabel").pack(anchor="w", pady=(4, 0))
+        # 최종 녹화 범위 요약과 확인 버튼: 모니터 + 영역을 합친 결과를 한 줄로 보여 준다
+        ttk.Separator(screen).pack(fill="x", pady=(0, 8))
+        summary_row = ttk.Frame(screen)
+        summary_row.pack(fill="x")
+        self.area_status = tk.StringVar()
+        self.area_label = ttk.Label(summary_row, textvariable=self.area_status, style="Pending.TLabel")
+        self.area_label.pack(side="left", fill="x", expand=True)
+        self.identify_button = ttk.Button(summary_row, text="녹화 범위 확인", command=self.identify_monitor)
+        self.identify_button.pack(side="left", padx=(8, 0))
+        self.set_confirmed(False)
 
         # 2. 소리 카드
         sound = self.card(frame, "소리")
@@ -266,6 +291,9 @@ class App:
         style.configure("Field.TLabel", font=("맑은 고딕", 10, "bold"), foreground="#dcdcdc")
         style.configure("CardHint.TLabel", font=("맑은 고딕", 9), foreground="#8c8c8c")
         style.configure("Badge.TLabel", font=("맑은 고딕", 10, "bold"), foreground="#57c8ff")
+        # 녹화 범위 확인 상태: 미확인(주황) · 확인됨(초록)
+        style.configure("Pending.TLabel", font=("맑은 고딕", 10, "bold"), foreground="#f0b429")
+        style.configure("Confirmed.TLabel", font=("맑은 고딕", 10, "bold"), foreground="#6ccb5f")
         style.configure("Status.TLabel", font=("맑은 고딕", 9), foreground="#a7a7a7")
         style.configure("TLabelframe.Label", font=("맑은 고딕", 11, "bold"))
         self.root.configure(background="#1c1c1c")
@@ -317,7 +345,17 @@ class App:
 
     def reset_region(self):
         self.selected_region = None
-        self.area_status.set("전체 모니터")
+        self.set_confirmed(False)
+
+    def current_monitor(self):
+        index = self.monitor_box.current()
+        return self.monitor_list[index] if 0 <= index < len(self.monitor_list) else None
+
+    def set_confirmed(self, confirmed):
+        # 범위가 바뀌면 미확인으로 되돌리고, 사용자가 확정하면 확인됨으로 표시한다
+        self.region_confirmed = confirmed
+        self.area_status.set(region_summary(self.current_monitor(), self.selected_region, confirmed))
+        self.area_label.configure(style="Confirmed.TLabel" if confirmed else "Pending.TLabel")
 
     def select_area(self):
         if self.selection_window and self.selection_window.winfo_exists():
@@ -359,7 +397,9 @@ class App:
             if not rect or rect[2] < 32 or rect[3] < 32:
                 return
             self.selected_region = (left + rect[0], top + rect[1], rect[2], rect[3])
-            self.area_status.set(f"선택 영역 · {rect[2]}×{rect[3]}")
+            # 드래그로 직접 지정한 영역은 그 자체로 확정으로 본다
+            self.set_confirmed(True)
+            self.status.set("녹화 영역을 확정했습니다. 녹화 범위 확인으로 다시 볼 수 있습니다.")
             window.destroy()
             self.root.deiconify()
             self.root.lift()
@@ -388,14 +428,77 @@ class App:
         return window
 
     def identify_monitor(self):
-        index = self.monitor_box.current()
-        if index < 0:
+        # 실제로 녹화될 범위(전체 모니터 또는 지정 영역)만 밝게 두고 나머지를 어둡게 덮어
+        # 사용자가 [확인] 또는 [취소]로 직접 결정하게 한다
+        monitor = self.current_monitor()
+        if not monitor:
             return
         if self.identification and self.identification.winfo_exists():
             self.identification.destroy()
-        self.identification = self.show_on_monitor(self.monitor_list[index], "이 화면이 녹화됩니다")
-        window = self.identification
-        self.root.after(2500, lambda: window.destroy() if window.winfo_exists() else None)
+        if monitor not in monitors():
+            messagebox.showerror("모니터 변경", "모니터 구성이 변경되었습니다. 새로고침 후 다시 선택하세요.")
+            return
+        _, left, top, width, height, _ = monitor
+        if self.selected_region:
+            rx, ry, rw, rh = self.selected_region
+            rx, ry = rx - left, ry - top
+        else:
+            rx, ry, rw, rh = 0, 0, width, height
+        hole = "#ff00fe"  # 이 색은 투명 처리되어 녹화 범위가 그대로 비쳐 보인다
+        window = tk.Toplevel(self.root)
+        self.identification = window
+        window.overrideredirect(True)
+        window.attributes("-topmost", True)
+        window.attributes("-alpha", 0.75)
+        window.attributes("-transparentcolor", hole)
+        canvas = tk.Canvas(window, bg="#000000", highlightthickness=0, width=width, height=height)
+        canvas.pack(fill="both", expand=True)
+        # 녹화 범위 밖은 어둡게, 안쪽은 투명하게 두고 테두리를 굵게 그린다
+        canvas.create_rectangle(rx, ry, rx + rw, ry + rh, fill=hole, outline="")
+        border = 6
+        canvas.create_rectangle(rx + border // 2, ry + border // 2, rx + rw - border // 2, ry + rh - border // 2, outline="#ff4055", width=border)
+
+        # 안내 패널: 무엇이 녹화되는지와 결정 버튼
+        # 반투명 덮개와 분리된 불투명 창으로 띄워 전체 모니터일 때도 잘 읽히게 한다
+        popup = tk.Toplevel(window)
+        popup.overrideredirect(True)
+        popup.attributes("-topmost", True)
+        panel = tk.Frame(popup, bg="#202020", highlightbackground="#ff4055", highlightthickness=2, padx=22, pady=16)
+        panel.pack()
+        kind = "지정 영역" if self.selected_region else "전체 모니터"
+        tk.Label(panel, text="빨간 테두리 안이 녹화됩니다", bg="#202020", fg="white", font=("맑은 고딕", 16, "bold")).pack()
+        tk.Label(panel, text=f"{monitor[0]} · {kind} · {rw}×{rh}", bg="#202020", fg="#57c8ff", font=("맑은 고딕", 11, "bold")).pack(pady=(4, 12))
+        buttons = tk.Frame(panel, bg="#202020")
+        buttons.pack()
+
+        def decide(confirmed):
+            if window.winfo_exists():
+                window.destroy()
+            self.set_confirmed(confirmed)
+            if confirmed:
+                self.status.set("녹화 범위를 확인했습니다. 녹화 시작(F8)을 누르세요.")
+            else:
+                self.status.set("녹화 범위 확인을 취소했습니다. 영역 지정 또는 전체 화면으로 다시 고르세요.")
+            self.root.deiconify()
+            self.root.lift()
+
+        tk.Button(buttons, text="✔  확인 (Enter)", command=lambda: decide(True), bg="#2f8f46", fg="white", activebackground="#25733a", activeforeground="white", font=("맑은 고딕", 11, "bold"), relief="flat", padx=16, pady=6, cursor="hand2").pack(side="left", padx=6)
+        tk.Button(buttons, text="취소 (Esc)", command=lambda: decide(False), bg="#3a3a3a", fg="white", activebackground="#4a4a4a", activeforeground="white", font=("맑은 고딕", 11), relief="flat", padx=16, pady=6, cursor="hand2").pack(side="left", padx=6)
+        for target in (window, popup):
+            target.bind("<Return>", lambda event: decide(True))
+            target.bind("<Escape>", lambda event: decide(False))
+        window.geometry(f"{width}x{height}+0+0")
+        window.update_idletasks()
+        user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        user32.SetWindowPos(window.winfo_id(), None, left, top, width, height, 0x0040)
+        popup.update_idletasks()
+        pw, ph = popup.winfo_reqwidth(), popup.winfo_reqheight()
+        py = panel_y(ry, rh, height, ph)
+        # winfo_id()는 내부 창이라 위치가 어긋나므로 실제 최상위 창(wm_frame)을 옮긴다
+        user32.SetWindowPos(int(popup.wm_frame(), 16), None, left + (width - pw) // 2, top + py - ph // 2, pw, ph, 0x0040)
+        popup.lift(window)
+        popup.focus_force()
+        self.identification_popup = popup
 
     def poll(self):
         if not self.results.empty():
